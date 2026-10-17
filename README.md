@@ -123,13 +123,5 @@ http://127.0.0.1:5000
 
 This project is intended for **educational purposes and learning about cryptographic concepts**. Do not use the Caesar Cipher to protect sensitive information. Before using this application for real-world confidential data, review its key management, deployment configuration, input handling, and security practices.
 
-## 👨‍💻 Author
-
-**Your Name**
-
-- GitHub: YOUR_GITHUB_USERNAME
-- LinkedIn: YOUR_LINKEDIN_PROFILE_URL
-
----
 
 ⭐ If you find this project interesting, consider starring the repository!
