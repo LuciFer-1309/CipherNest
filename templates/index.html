@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0a0912">
+    <title>CipherNest | Text Encryption Studio</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <header class="navbar">
+        <a href="/" class="brand" aria-label="CipherNest home">
+            <div class="brand-icon">&lt;/&gt;</div>
+            <div>Cipher<span>Nest</span></div>
+        </a>
+
+        <div class="nav-status">
+            <span class="status-dot"></span>
+            encryption workspace online
+        </div>
+    </header>
+
+    <main class="container">
+        <section class="hero">
+            <div class="eyebrow">your privacy, your control</div>
+            <h1>
+                Protect your
+                <span class="scramble" id="scramble" data-text="message.">message.</span>
+            </h1>
+            <p>
+                Encrypt and decrypt text with Fernet or the classic Caesar cipher.
+                Built to help you learn how cryptography works.
+            </p>
+        </section>
+
+        <div id="notice-area" aria-live="polite">
+            {% if message %}
+            <div class="success" role="status">{{ message }}</div>
+            {% endif %}
+            {% if error %}
+            <div class="error" role="alert">{{ error }}</div>
+            {% endif %}
+        </div>
+
+        <section class="tool-card">
+            <div class="card-heading">
+                <div>
+                    <h2>Message encryption studio</h2>
+                    <p>Pick a cipher, enter your text, then encrypt or decrypt.</p>
+                </div>
+                <span class="panel-tag ok">&#9679; ready</span>
+            </div>
+
+            <form method="POST" action="/">
+                <div class="form-group">
+                    <label class="method-label" for="method">cipher method</label>
+
+                    <select id="method" name="method">
+                        <option value="fernet"
+                            {% if method == 'fernet' %}selected{% endif %}>
+                            Fernet: authenticated encryption
+                        </option>
+                        <option value="caesar"
+                            {% if method == 'caesar' %}selected{% endif %}>
+                            Caesar cipher: learning only
+                        </option>
+                    </select>
+                </div>
+
+                <div class="form-group shift-field" id="shift-field">
+                    <label class="field-label" for="shift">caesar shift (0-25)</label>
+                    <input id="shift" type="number" name="shift"
+                           min="0" max="25" value="{{ shift }}">
+                </div>
+
+                <div class="workspace">
+                    <div class="panel">
+                        <div class="panel-top">
+                            <label for="text"> your message</label>
+                            <span class="panel-tag" id="char-count">0 chars</span>
+                        </div>
+
+                        <textarea id="text" name="text" rows="7"
+                            placeholder="Type your message here..."
+                            required>{{ request.form.get('text', '') }}</textarea>
+
+                        <p class="hint">
+                            Enter plain text to encrypt, or ciphertext to decrypt.
+                        </p>
+                    </div>
+
+                    <div class="panel viz" id="output-panel"
+                         data-state="{% if result %}done{% else %}idle{% endif %}"
+                         data-op="{% if result %}{{ operation }}{% endif %}">
+                        <div class="panel-top">
+                            <p class="panel-title"> live visualizer</p>
+                            <span class="panel-tag" id="viz-status" role="status">ready</span>
+                        </div>
+
+                        <div class="viz-stage">
+                            <svg class="viz-svg" viewBox="0 0 240 150" role="img" aria-label="Encryption state illustration">
+                                <g class="viz-lines">
+                                    <path d="M6 75 H76"/><path d="M6 52 H68"/><path d="M6 98 H68"/>
+                                    <path d="M164 75 H234"/><path d="M172 52 H234"/><path d="M172 98 H234"/>
+                                </g>
+                                <circle class="pt d1" cx="6" cy="75" r="2.4"/>
+                                <circle class="pt d2" cx="6" cy="52" r="2.4"/>
+                                <circle class="pt d3" cx="6" cy="98" r="2.4"/>
+                                <circle class="pt d1" cx="168" cy="75" r="2.4"/>
+                                <circle class="pt d2" cx="172" cy="52" r="2.4"/>
+                                <circle class="pt d3" cx="172" cy="98" r="2.4"/>
+                                <circle class="ring r1" cx="120" cy="73" r="56"/>
+                                <circle class="ring r2" cx="120" cy="73" r="56"/>
+                                <path class="viz-shield" d="M120 10 L162 26 V70 C162 100 144 122 120 136 C96 122 78 100 78 70 V26 Z"/>
+                                <g class="viz-lock">
+                                    <path class="viz-shackle" d="M109 68 V60 a11 11 0 0 1 22 0 V68"/>
+                                    <rect x="104" y="68" width="32" height="25" rx="5"/>
+                                    <circle cx="120" cy="79" r="3.2"/>
+                                    <rect class="viz-key" x="118.8" y="79" width="2.4" height="8" rx="1.2"/>
+                                </g>
+                                <g class="viz-badge">
+                                    <circle cx="162" cy="30" r="12"/>
+                                    <path d="M156 30 l4.5 4.5 l8 -9"/>
+                                </g>
+                            </svg>
+                        </div>
+
+                        <p class="viz-title">
+                            <span class="t-idle">Your workspace is ready.</span>
+                            <span class="t-busy">Processing your request...</span>
+                            <span class="t-done" id="viz-done">{% if result %}{% if operation == 'encrypt' %}Encryption complete{% else %}Decryption complete{% endif %}{% endif %}</span>
+                            <span class="t-err">Something went wrong</span>
+                        </p>
+                        <p class="viz-sub">
+                            <span class="t-idle">Choose a cipher, type a message, then encrypt or decrypt.</span>
+                            <span class="t-busy">Waiting for the server to respond.</span>
+                            <span class="t-done">Your result is ready. Copy it or download it as a TXT file.</span>
+                            <span class="t-err" id="viz-err"></span>
+                        </p>
+
+                        <div class="viz-chips">
+                            <span class="chip">cipher <b id="viz-cipher">Fernet</b></span>
+                            <span class="chip">operation <b id="viz-op">not chosen yet</b></span>
+                            <span class="chip" id="viz-shift-chip" hidden>shift <b id="viz-shift">3</b></span>
+                        </div>
+
+                        <div class="viz-io">
+                            <div class="viz-box">
+                                <span class="viz-k">input (live)</span>
+                                <code id="viz-preview">No input yet</code>
+                            </div>
+                            <span class="viz-arrow" aria-hidden="true">&#8594;</span>
+                            <div class="viz-box">
+                                <span class="viz-k">output</span>
+                                <code id="viz-out">waiting for result</code>
+                            </div>
+                        </div>
+
+                        <div class="viz-result" id="viz-result" {% if not result %}hidden{% endif %}>
+                            <textarea id="result" rows="6" class="result-box" readonly>{{ result if result else '' }}</textarea>
+
+                            <div class="actions">
+                                <button type="button" class="btn btn-primary" onclick="copyResult()">
+                                    Copy result
+                                </button>
+                                <button type="submit" form="download-form" class="btn btn-secondary">
+                                    Download TXT
+                                </button>
+                            </div>
+
+                            <p id="copy-status" class="hint" aria-live="polite"></p>
+                        </div>
+
+                        <div class="viz-explain" data-cipher="fernet">
+                            <h4>Fernet: authenticated encryption</h4>
+                            <div class="flow" id="fernet-flow" data-stage="idle">
+                                <div class="node"><b id="fl-a">Plaintext</b></div>
+                                <span class="flow-arrow" aria-hidden="true">&#8594;</span>
+                                <div class="node mid">
+                                    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="4"/><path d="M12 12 H21 M18 12 V16"/></svg>
+                                    <b id="fl-b">Secure processing</b>
+                                </div>
+                                <span class="flow-arrow" aria-hidden="true">&#8594;</span>
+                                <div class="node"><b id="fl-c">Ciphertext</b></div>
+                            </div>
+                            <p>The token can only be read with the secret key. Any change made to the
+                               token is detected when you decrypt, so tampered data is rejected.
+                               The key itself is never shown here.</p>
+                        </div>
+
+                        <div class="viz-explain" data-cipher="caesar" hidden>
+                            <h4>Caesar cipher: shift <span id="strip-shift">3</span> <span id="strip-dir"></span></h4>
+                            <p class="strip-label" id="lbl-top"></p>
+                            <div class="strip" id="strip-top" aria-hidden="true"></div>
+                            <div class="strip-arrow" aria-hidden="true">&#9660;</div>
+                            <div class="strip alt" id="strip-bottom" aria-hidden="true"></div>
+                            <p class="strip-label" id="lbl-bottom"></p>
+                            <p id="strip-caption"></p>
+                            <p class="viz-warn">Easy to break. Use it to learn, not to protect secrets.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="actions">
+                    <button type="submit" name="operation" value="encrypt"
+                            class="btn btn-primary">
+                        🔒 Encrypt message
+                    </button>
+
+                    <button type="submit" name="operation" value="decrypt"
+                            class="btn btn-secondary">
+                        🔓 Decrypt message
+                    </button>
+
+                    <button type="reset" class="btn btn-outline" id="clear-button">
+                        Clear input
+                    </button>
+                </div>
+
+                <p class="hint">
+                    Fernet needs the same secret key for decryption.
+                    Caesar cipher is not safe for protecting real secrets.
+                </p>
+            </form>
+
+            <form id="download-form" action="/download" method="POST">
+                <input type="hidden" name="result" id="download-result" value="{{ result if result else '' }}">
+            </form>
+        </section>
+
+        <section class="info">
+            <div class="card-heading">
+                <div>
+                    <h2>How it works</h2>
+                </div>
+            </div>
+
+            <div class="info-grid">
+                <article class="info-card">
+                    <div class="info-icon">🔒</div>
+                    <h3>1. Encrypt</h3>
+                    <p>Turn readable text into ciphertext with your chosen method.</p>
+                </article>
+
+                <article class="info-card">
+                    <div class="info-icon">🛡️</div>
+                    <h3>2. Protect</h3>
+                    <p>Fernet gives you authenticated encryption backed by a secret key.</p>
+                </article>
+
+                <article class="info-card">
+                    <div class="info-icon">🔓</div>
+                    <h3>3. Decrypt</h3>
+                    <p>Get the original message back with the matching key or shift.</p>
+                </article>
+            </div>
+        </section>
+
+        <section class="features">
+            <article class="feature-card">
+                <h3>Two cipher methods</h3>
+                <p>Try modern Fernet and the classical Caesar cipher side by side.</p>
+            </article>
+
+            <article class="feature-card">
+                <h3>Export your result</h3>
+                <p>Copy the output or download it as a TXT file.</p>
+            </article>
+
+            <article class="feature-card">
+                <h3>Hands-on learning</h3>
+                <p>Experiment with real encryption to see how it behaves.</p>
+            </article>
+        </section>
+    </main>
+
+    <footer class="footer">
+        Built with <strong>Python + Flask</strong> &middot; Educational cybersecurity project
+        <br>
+        Avoid entering real passwords, bank details, or sensitive personal data.
+    </footer>
+
+    <script>
+        const methodSelect = document.getElementById("method");
+        const shiftField = document.getElementById("shift-field");
+        const shiftInput = document.getElementById("shift");
+        const textInput = document.getElementById("text");
+        const charCount = document.getElementById("char-count");
+        const form = document.querySelector('form[action="/"]');
+        const viz = document.getElementById("output-panel");
+        const resultBox = document.getElementById("result");
+        const resultWrap = document.getElementById("viz-result");
+        const downloadInput = document.getElementById("download-result");
+        const noticeArea = document.getElementById("notice-area");
+        const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+        const ALPHA = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        const STATUS = { idle: "ready", processing: "processing", done: "completed", error: "error" };
+        const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+        let busy = false;
+
+        /* ---------- small helpers (user text only ever goes in via textContent) ---------- */
+        function updateShiftVisibility() {
+            shiftField.style.display = methodSelect.value === "caesar" ? "block" : "none";
+        }
+
+        function updateCount() {
+            charCount.textContent = textInput.value.length + " chars";
+        }
+
+        function previewText(value) {
+            const clean = value.replace(/\s+/g, " ").trim();
+            if (!clean) return "No input yet";
+            return (clean.length > 24 ? clean.slice(0, 24) + "..." : clean) + "  (" + value.length + " chars)";
+        }
+
+        function setNotice(kind, text) {
+            noticeArea.replaceChildren();
+            if (!text) return;
+            const box = document.createElement("div");
+            box.className = kind;
+            box.setAttribute("role", kind === "error" ? "alert" : "status");
+            box.textContent = text;
+            noticeArea.append(box);
+        }
+
+        /* ---------- Caesar strip: direction follows the operation, shift follows the input ---------- */
+        function renderStrip() {
+            let n = parseInt(shiftInput.value, 10) || 0;
+            n = ((n % 26) + 26) % 26;
+            const decrypting = viz.dataset.op === "decrypt";
+            const plain = [...ALPHA];
+            const shifted = plain.map((c, i) => ALPHA[(i + n) % 26]);
+            const topRow = decrypting ? shifted : plain;
+            const bottomRow = decrypting ? plain : shifted;
+
+            const typed = new Set(textInput.value.toUpperCase().replace(/[^A-Z]/g, ""));
+            const cells = (letters, mark) => letters.map(letter => {
+                const span = document.createElement("span");
+                span.textContent = letter;
+                if (mark && typed.has(letter)) span.className = "hit";
+                return span;
+            });
+            document.getElementById("strip-top").replaceChildren(...cells(topRow, true));
+            document.getElementById("strip-bottom").replaceChildren(...cells(bottomRow, false));
+
+            document.getElementById("strip-shift").textContent = n;
+            document.getElementById("strip-dir").textContent = decrypting ? "(reverse)" : "(forward)";
+            document.getElementById("lbl-top").textContent = decrypting ? "ciphertext letter" : "plaintext letter";
+            document.getElementById("lbl-bottom").textContent = decrypting ? "becomes plaintext letter" : "becomes ciphertext letter";
+
+            const pairs = [0, 1, 2].map(i => topRow[i] + " \u2192 " + bottomRow[i]).join(", ");
+            document.getElementById("strip-caption").textContent =
+                n === 0 ? "Shift 0 leaves every letter unchanged." : "Shift " + n + ": " + pairs + ".";
+        }
+
+        /* ---------- Fernet flow: reverses for decryption ---------- */
+        function renderFlow() {
+            const decrypting = viz.dataset.op === "decrypt";
+            document.getElementById("fl-a").textContent = decrypting ? "Ciphertext" : "Plaintext";
+            document.getElementById("fl-b").textContent = decrypting ? "Decryption" : "Secure processing";
+            document.getElementById("fl-c").textContent = decrypting ? "Plaintext" : "Ciphertext";
+            document.getElementById("fernet-flow").dataset.stage = viz.dataset.state;
+        }
+
+        /* ---------- one function keeps the whole panel in sync ---------- */
+        function renderViz() {
+            const state = viz.dataset.state;
+            const op = viz.dataset.op;
+            const caesar = methodSelect.value === "caesar";
+
+            document.getElementById("viz-cipher").textContent = caesar ? "Caesar cipher" : "Fernet";
+            document.getElementById("viz-op").textContent =
+                op === "encrypt" ? "Encrypt" : op === "decrypt" ? "Decrypt" : "not chosen yet";
+            document.getElementById("viz-status").textContent = STATUS[state];
+
+            const shiftChip = document.getElementById("viz-shift-chip");
+            shiftChip.hidden = !caesar;
+            document.getElementById("viz-shift").textContent = shiftInput.value || "0";
+
+            document.getElementById("viz-preview").textContent = previewText(textInput.value);
+            document.getElementById("viz-out").textContent =
+                state === "done" ? previewText(resultBox.value)
+                : state === "processing" ? "waiting for the server..."
+                : state === "error" ? "no result" : "waiting for result";
+
+            viz.querySelectorAll(".viz-explain").forEach(block => {
+                block.hidden = block.dataset.cipher !== methodSelect.value;
+            });
+            renderStrip();
+            renderFlow();
+        }
+
+        /* Scramble: random characters settle into the real text. The final value
+           is always set exactly, so Copy and Download stay accurate. */
+        const GLYPHS = "!<>-_\\/[]{}=+*^?#0123456789abcdef";
+
+        function scramble(setText, finalText, duration) {
+            if (reduceMotion) { setText(finalText); return; }
+            const start = performance.now();
+            function frame(now) {
+                const progress = Math.min((now - start) / duration, 1);
+                const settled = Math.floor(progress * finalText.length);
+                let out = "";
+                for (let i = 0; i < finalText.length; i++) {
+                    const ch = finalText[i];
+                    out += (i < settled || ch === " " || ch === "\n")
+                        ? ch : GLYPHS[Math.floor(Math.random() * GLYPHS.length)];
+                }
+                setText(progress < 1 ? out : finalText);
+                if (progress < 1) requestAnimationFrame(frame);
+            }
+            requestAnimationFrame(frame);
+        }
+
+        function revealResult() {
+            const finalValue = resultBox.value;
+            const duration = Math.min(1400, 400 + finalValue.length * 8);
+            scramble(t => resultBox.value = t, finalValue, duration);
+            if (window.matchMedia("(max-width: 720px)").matches) {
+                viz.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
+            }
+        }
+
+        /* ---------- real request to your Flask route ---------- */
+        function showResult(text, op, doc) {
+            resultBox.value = text;
+            downloadInput.value = text;
+            resultWrap.hidden = false;
+            document.getElementById("copy-status").textContent = "";
+            document.getElementById("viz-done").textContent =
+                op === "encrypt" ? "Encryption complete" : "Decryption complete";
+            viz.dataset.state = "done";
+            viz.dataset.op = op;
+            const ok = doc.querySelector("#notice-area .success");
+            setNotice("success", ok ? ok.textContent.trim() : "");
+            renderViz();
+            revealResult();
+        }
+
+        function showError(message, op) {
+            viz.dataset.state = "error";
+            viz.dataset.op = op;
+            resultWrap.hidden = true;
+            document.getElementById("viz-err").textContent = message;
+            setNotice("error", message);
+            renderViz();
+        }
+
+        form.addEventListener("submit", async event => {
+            const op = event.submitter && event.submitter.value;
+            if (!op || !window.fetch) return;          // fall back to a normal form submit
+            event.preventDefault();
+            if (busy) return;
+            busy = true;
+            form.querySelectorAll('button[type="submit"]').forEach(b => b.disabled = true);
+            viz.dataset.state = "processing";
+            viz.dataset.op = op;
+            setNotice("", "");
+            renderViz();
+
+            const body = new URLSearchParams(new FormData(form));
+            body.set("operation", op);
+
+            try {
+                // the short wait only keeps the animation from flashing past; it is not a progress bar
+                const [response] = await Promise.all([
+                    fetch(form.action, { method: "POST", body }),
+                    reduceMotion ? null : sleep(750)
+                ]);
+                if (!response.ok) throw new Error("The server returned an error (" + response.status + ").");
+
+                const doc = new DOMParser().parseFromString(await response.text(), "text/html");
+                const returned = doc.getElementById("result");
+                if (returned && returned.value) {
+                    showResult(returned.value, op, doc);
+                } else {
+                    const problem = doc.querySelector("#notice-area .error");
+                    throw new Error(problem ? problem.textContent.trim()
+                        : "No result was returned. Check your input and try again.");
+                }
+            } catch (err) {
+                showError(err instanceof TypeError ? "Could not reach the server." : err.message, op);
+            } finally {
+                busy = false;
+                form.querySelectorAll('button[type="submit"]').forEach(b => b.disabled = false);
+            }
+        });
+
+        /* ---------- wiring ---------- */
+        methodSelect.addEventListener("change", () => { updateShiftVisibility(); renderViz(); });
+        shiftInput.addEventListener("input", renderViz);
+        textInput.addEventListener("input", () => { updateCount(); renderViz(); });
+
+        updateShiftVisibility();
+        updateCount();
+        renderViz();
+        if (viz.dataset.state === "done" && resultBox.value) revealResult();
+
+        window.addEventListener("pageshow", event => {
+            if (event.persisted && viz.dataset.state === "processing") location.reload();
+        });
+
+        function copyResult() {
+            const output = document.getElementById("result");
+            const status = document.getElementById("copy-status");
+
+            if (!output || !status) return;
+
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(output.value)
+                    .then(() => status.textContent = "Copied to clipboard!")
+                    .catch(() => status.textContent =
+                        "Copy failed. Select and copy the result manually.");
+            } else {
+                output.select();
+                const copied = document.execCommand("copy");
+                status.textContent = copied
+                    ? "Copied to clipboard!"
+                    : "Select and copy the result manually.";
+            }
+        }
+
+        document.getElementById("clear-button").addEventListener("click", () => {
+            setTimeout(() => {
+                textInput.value = "";
+                updateCount();
+                renderViz();
+                textInput.focus();
+            }, 0);
+        });
+    </script>
+</body>
+</html>
