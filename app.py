@@ -1,37 +1,30 @@
 
-from pathlib import Path
+import os
 from io import BytesIO
 
-from flask import (
-    Flask, render_template, request,
-    send_file
-)
+from flask import Flask, render_template, request, send_file
 from cryptography.fernet import Fernet, InvalidToken
 
 
 app = Flask(__name__)
 
-# Project folder ka path
-BASE_DIR = Path(__file__).resolve().parent
-KEY_FILE = BASE_DIR / "key.key"
+# Fernet key Vercel ke environment variable se load hogi
+key_value = os.environ.get("FERNET_KEY")
+
+if not key_value:
+    raise RuntimeError(
+        "FERNET_KEY environment variable is missing. "
+        "Please configure it before starting the application."
+    )
+
+try:
+    FERNET_KEY = key_value.encode("ascii")
+    Fernet(FERNET_KEY)  # Verify that the key is valid
+except (ValueError, UnicodeEncodeError):
+    raise RuntimeError("FERNET_KEY is invalid. Generate a valid Fernet key.")
 
 
-# Fernet key ko pehli baar generate karo
-# Agar key pehle se hai, toh usi ko use karo
-def load_or_create_key():
-    if KEY_FILE.exists():
-        return KEY_FILE.read_bytes()
-
-    key = Fernet.generate_key()
-    KEY_FILE.write_bytes(key)
-    return key
-
-
-# Application ke liye ek hi key load hogi
-FERNET_KEY = load_or_create_key()
-
-
-# Caesar Cipher: letters ko shift karna
+# Caesar Cipher encryption
 def caesar_encrypt(text, shift):
     result = ""
 
@@ -52,11 +45,12 @@ def caesar_encrypt(text, shift):
     return result
 
 
+# Caesar Cipher decryption
 def caesar_decrypt(text, shift):
     return caesar_encrypt(text, -shift)
 
 
-# Website ka main page
+# Main website page
 @app.route("/", methods=["GET", "POST"])
 def index():
     result = ""
@@ -111,11 +105,13 @@ def index():
                 "Invalid input. Check your message, shift "
                 "and encrypted text."
             )
+
         except InvalidToken:
             error = (
                 "Decryption failed. The encrypted text may be "
                 "incorrect, or the key may not match."
             )
+
         except Exception:
             error = "Something went wrong. Please try again."
 
@@ -130,7 +126,7 @@ def index():
     )
 
 
-# Output ko text file mein download karna
+# Download output as a text file
 @app.route("/download", methods=["POST"])
 def download():
     text = request.form.get("result", "")
@@ -150,4 +146,4 @@ def download():
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=False)
